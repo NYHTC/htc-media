@@ -7,9 +7,12 @@ but we need to do this because FileMaker/FM-plugins blow up the shell
 after 5000-6000 calls.
 """
 
-from flask import Flask, jsonify, request
-import exifread
 import subprocess
+
+from flask import Flask, jsonify, request
+from PIL import Image
+from dhash import dhash_row_col, format_hex
+import exifread
 
 
 app = Flask(__name__)
@@ -24,71 +27,97 @@ def ping():
 @app.route("/info", methods=["POST"])
 def info():
     """Get file info."""
-    if request.method == "POST":
-        req_data = request.get_json()
-        if req_data:
-            f_path = req_data["file_path"].replace("%20", " ")
-            f_name = exec_shell(["basename", f_path])
-            try:
-                f_type = exec_shell(["file", "-b", f_path])
-                f_size = exec_shell(["stat", "-f", "'%z'", f_path]).strip("'")
-                checksum = exec_shell(["md5", "-q", f_path])
-                mdls = exec_shell(["mdls", f_path])
-                exif = get_exif_data(f_path)
-            except OSError as e:
-                # FileNotFoundError is a subclass of OSError
-                print(e)
-                return "invalid file path: {}".format(f_path)
-            print(f_path)
-            return jsonify(
-                file_name=f_name,
-                file_size=f_size,
-                file_type=f_type,
-                checksum=checksum,
-                mdls=mdls,
-                exif=exif,
-            )
-    return "nothing specified"
+    if request.method != "POST":
+        return default_response()
+    f_path = file_path_from_request(request.get_json())
+    if not f_path:
+        return default_response()
+    f_name = exec_shell(["basename", f_path])
+    try:
+        f_type = exec_shell(["file", "-b", f_path])
+        f_size = exec_shell(["stat", "-f", "'%z'", f_path]).strip("'")
+        checksum = exec_shell(["md5", "-q", f_path])
+        mdls = exec_shell(["mdls", f_path])
+        exif = get_exif_data(f_path)
+    except OSError as e:
+        # FileNotFoundError is a subclass of OSError
+        print(e)
+        return "invalid file path: {}".format(f_path)
+    phash = get_phash(f_path)
+    print(f_path)
+    return jsonify(
+        file_name=f_name,
+        file_size=f_size,
+        file_type=f_type,
+        checksum=checksum,
+        mdls=mdls,
+        exif=exif,
+        phash=phash,
+    )
 
 
 @app.route("/get-folder-list", methods=["POST"])
 def get_folders():
     """Get a list of folders for the specified folder."""
-    if request.method == "POST":
-        req_data = request.get_json()
-        if req_data:
-            f_path = req_data["file_path"].replace("%20", " ")
-            folder_list = exec_shell(
-                ["find", f_path, "-type", "d", "-maxdepth", "1"]
-            ).split("\n")
-            folder_list = [i[len(f_path) :] for i in folder_list][1:]
-            return jsonify(folder_list=folder_list)
-    return "nothing specified"
+    if request.method != "POST":
+        return default_response()
+    f_path = file_path_from_request(request.get_json())
+    if not f_path:
+        return default_response()
+    folder_list = exec_shell(
+        ["find", f_path, "-type", "d", "-maxdepth", "1"]
+    ).split("\n")
+    folder_list = [i[len(f_path) :] for i in folder_list][1:]
+    return jsonify(folder_list=folder_list)
 
 
 @app.route("/get-file-list", methods=["POST"])
 def get_files():
     """Get a list of files for the specified folder."""
-    if request.method == "POST":
-        req_data = request.get_json()
-        if req_data:
-            f_path = req_data["file_path"].replace("%20", " ")
-            file_list = exec_shell(
-                [
-                    "find",
-                    f_path,
-                    "-type",
-                    "f",
-                    "-maxdepth",
-                    "1",
-                    "-exec",
-                    "basename",
-                    "{}",
-                    ";",
-                ]
-            ).split("\n")
-            return jsonify(file_list=file_list)
+    if request.method != "POST":
+        return default_response()
+    f_path = file_path_from_request(request.get_json())
+    if not f_path:
+        return default_response()
+    file_list = exec_shell(
+        [
+            "find",
+            f_path,
+            "-type",
+            "f",
+            "-maxdepth",
+            "1",
+            "-exec",
+            "basename",
+            "{}",
+            ";",
+        ]
+    ).split("\n")
+    return jsonify(file_list=file_list)
+
+
+@app.route("/get-phash", methods=["POST"])
+def get_phash_request():
+    """Endpoint wrapper for getting phash for specified file path."""
+    if request.method != "POST":
+        return default_response()
+    f_path = file_path_from_request(request.get_json())
+    if not f_path:
+        return default_response()
+    phash = get_phash(f_path)
+    return jsonify(phash=phash)
+
+
+def default_response():
+    """Default reply message for endpoints."""
     return "nothing specified"
+
+
+def file_path_from_request(request_obj):
+    """Extract the file path from the incoming request object."""
+    if request_obj:
+        return request_obj["file_path"].replace("%20", " ")
+    return None
 
 
 def exec_shell(cmd):
@@ -113,3 +142,12 @@ def get_exif_data(file_path=None):
         if k not in ignore_list and "MakerNote Tag 0x" not in k:
             d[k] = str(v)
     return d
+
+
+def get_phash(file_path=None):
+    """Get the perceptual hash of the specified file."""
+    if not file_path:
+        return None
+    img_1 = Image.open(file_path)
+    row_1, col_1 = dhash_row_col(img_1)
+    return format_hex(row_1, col_1)
