@@ -148,6 +148,11 @@ def get_phash(file_path=None):
     """Get the perceptual hash of the specified file."""
     if not file_path:
         return None
-    img_1 = Image.open(file_path)
-    row_1, col_1 = dhash_row_col(img_1)
-    return format_hex(row_1, col_1)
+    try:
+        img_1 = Image.open(file_path)
+        row_1, col_1 = dhash_row_col(img_1)
+        return format_hex(row_1, col_1)
+    except FileNotFoundError as e:
+        print(file_path)
+        print(e)
+        return None
