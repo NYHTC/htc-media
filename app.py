@@ -102,7 +102,6 @@ def get_file_list_with_types():
     if request.method != "POST":
         return default_response()
     f_path = file_path_from_request(request.get_json())
-    print(f_path)
     if not f_path:
         return default_response()
     file_list = exec_shell(
