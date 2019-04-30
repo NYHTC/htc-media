@@ -96,6 +96,32 @@ def get_files():
     return jsonify(file_list=file_list)
 
 
+@app.route("/get-file-list-with-type", methods=["POST"])
+def get_file_list_with_types():
+    """Get a list of files for the specified folder."""
+    if request.method != "POST":
+        return default_response()
+    f_path = file_path_from_request(request.get_json())
+    print(f_path)
+    if not f_path:
+        return default_response()
+    file_list = exec_shell(
+        [
+            "find",
+            f_path,
+            "-type",
+            "f",
+            "-maxdepth",
+            "1",
+            "-exec",
+            "file",
+            "{}",
+            ";",
+        ]
+    ).split("\n")
+    return jsonify(file_list=file_list)
+
+
 @app.route("/get-phash", methods=["POST"])
 def get_phash_request():
     """Endpoint wrapper for getting phash for specified file path."""
@@ -116,7 +142,8 @@ def default_response():
 def file_path_from_request(request_obj):
     """Extract the file path from the incoming request object."""
     if request_obj:
-        return request_obj["file_path"].replace("%20", " ")
+        # return request_obj["file_path"].replace("%20", " ")
+        return request_obj["file_path"].replace("%20", " ").rstrip("/")
     return None
 
 
