@@ -166,7 +166,10 @@ def get_exif_data(file_path=None):
     d = {}
     for k, v in tags.items():
         if k not in ignore_list and "MakerNote Tag 0x" not in k:
-            d[k] = str(v)
+            try:
+                d[k] = str(v)
+            except TypeError:
+                pass
     return d
 
 
@@ -174,11 +177,11 @@ def get_phash(file_path=None):
     """Get the perceptual hash of the specified file."""
     if not file_path:
         return None
-    print(file_path)
+    # print(file_path)
     try:
         img_1 = Image.open(file_path)
         row_1, col_1 = dhash_row_col(img_1)
         return format_hex(row_1, col_1)
-    except OSError as e:
+    except (OSError, AttributeError) as e:
         print(e)
         return None
