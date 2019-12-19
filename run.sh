@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ ! -d venv ]; then
+  echo "...building virtual environment"
+  python -m venv venv
+fi
+
 echo "...starting virtual environment"
 source venv/bin/activate
 
