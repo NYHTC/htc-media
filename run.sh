@@ -1,8 +1,9 @@
 #!/bin/bash
 
-if [ ! -d venv ]; then
-  echo "...building virtual environment"
-  python -m venv venv
+if [ ! -d "/venv" ]
+then
+    echo "... creating virtual environment"
+    python -m venv venv
 fi
 
 echo "...starting virtual environment"
